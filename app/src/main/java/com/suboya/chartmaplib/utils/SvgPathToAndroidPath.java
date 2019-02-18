@@ -1,124 +1,239 @@
 package com.suboya.chartmaplib.utils;
 
+import android.content.Context;
 import android.graphics.Path;
 import android.graphics.PointF;
 
+import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.List;
 
 public class SvgPathToAndroidPath {
-    private int svgPathLenght = 0;
-    private String svgPath = null;
+    private static final int TOKEN_ABSOLUTE_COMMAND = 1;
+    private static final int TOKEN_RELATIVE_COMMAND = 2;
+    private static final int TOKEN_VALUE = 3;
+    private static final int TOKEN_EOF = 4;
+    private int mCurrentToken;
+    private PointF mCurrentPoint = new PointF();
+    private int mLength;
     private int mIndex;
-    private List<Integer> cmdPositions = new ArrayList<>();
-    /**
-     * M x,y
-     * L x,y
-     * H x
-     * V y
-     * C x1,y1,x2,y2,x,y
-     * Q x1,y1,x,y
-     * S x2,y2,x,y
-     * T x,y
-     * */
-    public Path parser(String svgPath) {
-        this.svgPath = svgPath;
-        svgPathLenght = svgPath.length();
+    private String mPathString;
+    private float Max_X,Min_x,Max_y,Min_y;
+    protected float transformX(float x) {
+        return x;
+    }
+    protected float transformY(float y) {
+        return y;
+    }
+    public Path parsePath(String s) throws ParseException {
+        mCurrentPoint.set(Float.NaN, Float.NaN);
+        mPathString = s;
         mIndex = 0;
-        Path lPath = new Path();
-        lPath.setFillType(Path.FillType.WINDING);
-        //记录最后一个操作点
-        PointF lastPoint = new PointF();
-        findCommand();
-        for (int i = 0; i < cmdPositions.size(); i++) {
-            Integer index = cmdPositions.get(i);
-            switch (svgPath.charAt(index)) {
-                case 'm':
-                case 'M': {
-                    String ps[] = findPoints(i);
-                    lastPoint.set(Float.parseFloat(ps[0]), Float.parseFloat(ps[1]));
-                    lPath.moveTo(lastPoint.x, lastPoint.y);
+        mLength = mPathString.length();
+        PointF tempPoint1 = new PointF();
+        PointF tempPoint2 = new PointF();
+        PointF tempPoint3 = new PointF();
+        Path p = new Path();
+        p.setFillType(Path.FillType.WINDING);
+        boolean firstMove = true;
+        while (mIndex < mLength) {
+            char command = consumeCommand();
+            boolean relative = (mCurrentToken == TOKEN_RELATIVE_COMMAND);
+            switch (command) {
+                case 'M':
+                case 'm': {
+                    boolean firstPoint = true;
+                    while (advanceToNextToken() == TOKEN_VALUE) {
+                        consumeAndTransformPoint(tempPoint1,
+                                relative && mCurrentPoint.x != Float.NaN);
+                        if (firstPoint) {
+                            getMaxAndMinXY(tempPoint1);
+                            p.moveTo(tempPoint1.x, tempPoint1.y);
+                            firstPoint = false;
+                            if (firstMove) {
+                                mCurrentPoint.set(tempPoint1);
+                                firstMove = false;
+                            }
+                        }
+                        else {
+                            getMaxAndMinXY(tempPoint1);
+                            p.lineTo(tempPoint1.x, tempPoint1.y);
+                        }
+                    }
+                    mCurrentPoint.set(tempPoint1);
+                    break;
                 }
-                break;
-                case 'l':
-                case 'L': {
-                    String ps[] = findPoints(i);
-                    lastPoint.set(Float.parseFloat(ps[0]), Float.parseFloat(ps[1]));
-                    lPath.lineTo(lastPoint.x, lastPoint.y);
+                case 'C':
+                case 'c': {
+                    if (mCurrentPoint.x == Float.NaN) {
+                        throw new ParseException("Relative commands require current point", mIndex);
+                    }
+
+                    while (advanceToNextToken() == TOKEN_VALUE) {
+                        consumeAndTransformPoint(tempPoint1, relative);
+                        consumeAndTransformPoint(tempPoint2, relative);
+                        consumeAndTransformPoint(tempPoint3, relative);
+                        p.cubicTo(tempPoint1.x, tempPoint1.y, tempPoint2.x, tempPoint2.y,
+                                tempPoint3.x, tempPoint3.y);
+                    }
+                    mCurrentPoint.set(tempPoint3);
+                    break;
                 }
-                break;
-                case 'h':
-                case 'H': {//基于上个坐标在水平方向上划线，因此y轴不变
-                    String ps[] = findPoints(i);
-                    lastPoint.set(Float.parseFloat(ps[0]), lastPoint.y);
-                    lPath.lineTo(lastPoint.x, lastPoint.y);
+                case 'L':
+                case 'l': {
+                    if (mCurrentPoint.x == Float.NaN) {
+                        throw new ParseException("Relative commands require current point", mIndex);
+                    }
+
+                    while (advanceToNextToken() == TOKEN_VALUE) {
+                        consumeAndTransformPoint(tempPoint1, relative);
+                        getMaxAndMinXY(tempPoint1);
+                        p.lineTo(tempPoint1.x, tempPoint1.y);
+                    }
+                    mCurrentPoint.set(tempPoint1);
+                    break;
                 }
-                break;
-                case 'v':
-                case 'V': {//基于上个坐标在水平方向上划线，因此x轴不变
-                    String ps[] = findPoints(i);
-                    lastPoint.set(lastPoint.x, Float.parseFloat(ps[0]));
-                    lPath.lineTo(lastPoint.x, lastPoint.y);
+                case 'H':
+                case 'h': {
+                    if (mCurrentPoint.x == Float.NaN) {
+                        throw new ParseException("Relative commands require current point", mIndex);
+                    }
+
+                    while (advanceToNextToken() == TOKEN_VALUE) {
+                        float x = transformX(consumeValue());
+                        if (relative) {
+                            x += mCurrentPoint.x;
+                        }
+                        getMaxAndMinXY(tempPoint1);
+                        p.lineTo(x, mCurrentPoint.y);
+                    }
+                    mCurrentPoint.set(tempPoint1);
+                    break;
                 }
-                break;
-                case 'c':
-                case 'C': {//3次贝塞尔曲线
-                    String ps[] = findPoints(i);
-                    lastPoint.set(Float.parseFloat(ps[4]), Float.parseFloat(ps[5]));
-                    lPath.cubicTo(Float.parseFloat(ps[0]), Float.parseFloat(ps[1]), Float.parseFloat(ps[2]), Float.parseFloat(ps[3]), Float.parseFloat(ps[4]), Float.parseFloat(ps[5]));
+                case 'V':
+                case 'v': {
+                    if (mCurrentPoint.x == Float.NaN) {
+                        throw new ParseException("Relative commands require current point", mIndex);
+                    }
+                    while (advanceToNextToken() == TOKEN_VALUE) {
+                        float y = transformY(consumeValue());
+                        if (relative) {
+                            y += mCurrentPoint.y;
+                        }
+                        p.lineTo(mCurrentPoint.x, y);
+                    }
+                    mCurrentPoint.set(tempPoint1);
+                    break;
                 }
-                break;
-                case 's':
-                case 'S': {//一般S会跟在C或是S命令后面使用，用前一个点做起始控制点
-                    String ps[] = findPoints(i);
-                    lPath.cubicTo(lastPoint.x,lastPoint.y,Float.parseFloat(ps[0]), Float.parseFloat(ps[1]), Float.parseFloat(ps[2]), Float.parseFloat(ps[3]));
-                    lastPoint.set(Float.parseFloat(ps[2]), Float.parseFloat(ps[3]));
+                case 'Z':
+                case 'z': {
+                    p.close();
+                    break;
                 }
-                break;
-                case 'q':
-                case 'Q': {//二次贝塞尔曲线
-                    String ps[] = findPoints(i);
-                    lastPoint.set(Float.parseFloat(ps[2]), Float.parseFloat(ps[3]));
-                    lPath.quadTo(Float.parseFloat(ps[0]), Float.parseFloat(ps[1]), Float.parseFloat(ps[2]), Float.parseFloat(ps[3]));
-                }
-                break;
-                case 't':
-                case 'T': {//T命令会跟在Q后面使用，用Q的结束点做起始点
-                    String ps[] = findPoints(i);
-                    lPath.quadTo(lastPoint.x,lastPoint.y,Float.parseFloat(ps[0]), Float.parseFloat(ps[1]));
-                    lastPoint.set(Float.parseFloat(ps[0]), Float.parseFloat(ps[1]));
-                }
-                break;
-                case 'a':
-                case 'A':{//画弧
-                }
-                break;
-                case 'z':
-                case 'Z': {//结束
-                    lPath.close();
-                }
-                break;
             }
+
         }
-        return lPath;
-    }
 
-    private String[] findPoints(int cmdIndexInPosition) {
-        int cmdIndex = cmdPositions.get(cmdIndexInPosition);
-        String pointString = svgPath.substring(cmdIndex + 1, cmdPositions.get(cmdIndexInPosition + 1));
-        return pointString.split(",");
+        return p;
     }
-
-    private void findCommand() {
-        cmdPositions.clear();
-        while (mIndex < svgPathLenght) {
-            char c = svgPath.charAt(mIndex);
-            if ('A' <= c && c <= 'Z') {
-                cmdPositions.add(mIndex);
-            }else if ('a' <= c && c <= 'z') {
-                cmdPositions.add(mIndex);
+    private void getMaxAndMinXY(PointF pointF){
+        if (pointF.x>=Max_X){
+            Max_X=pointF.x;
+        }
+        if (pointF.x<=Min_x){
+            Min_x=pointF.x;
+        }
+        if (pointF.y>=Max_y){
+            Max_y=pointF.y;
+        }
+        if (pointF.y<=Min_y){
+            Min_y=pointF.y;
+        }
+    }
+    private int advanceToNextToken() {
+        while (mIndex < mLength) {
+            char c = mPathString.charAt(mIndex);
+            if ('a' <= c && c <= 'z') {
+                return (mCurrentToken = TOKEN_RELATIVE_COMMAND);
+            } else if ('A' <= c && c <= 'Z') {
+                return (mCurrentToken = TOKEN_ABSOLUTE_COMMAND);
+            } else if (('0' <= c && c <= '9') || c == '.' || c == '-') {
+                return (mCurrentToken = TOKEN_VALUE);
             }
+
             ++mIndex;
         }
+
+        return (mCurrentToken = TOKEN_EOF);
     }
+
+    private char consumeCommand() throws ParseException {
+        advanceToNextToken();
+        if (mCurrentToken != TOKEN_RELATIVE_COMMAND && mCurrentToken != TOKEN_ABSOLUTE_COMMAND) {
+            throw new ParseException("Expected command", mIndex);
+        }
+
+        return mPathString.charAt(mIndex++);
+    }
+
+    private void consumeAndTransformPoint(PointF out, boolean relative) throws ParseException {
+        out.x = transformX(consumeValue());
+        out.y = transformY(consumeValue());
+        if (relative) {
+            out.x += mCurrentPoint.x;
+            out.y += mCurrentPoint.y;
+        }
+    }
+
+    private float consumeValue() throws ParseException {
+        advanceToNextToken();
+        if (mCurrentToken != TOKEN_VALUE) {
+            throw new ParseException("Expected value", mIndex);
+        }
+
+        boolean start = true;
+        boolean seenDot = false;
+        int index = mIndex;
+        while (index < mLength) {
+            char c = mPathString.charAt(index);
+            if (!('0' <= c && c <= '9') && (c != '.' || seenDot) && (c != '-' || !start)) {
+                break;
+            }
+            if (c == '.') {
+                seenDot = true;
+            }
+            start = false;
+            ++index;
+        }
+
+        if (index == mIndex) {
+            throw new ParseException("Expected value", mIndex);
+        }
+
+        String str = mPathString.substring(mIndex, index);
+        try {
+            float value = Float.parseFloat(str);
+            mIndex = index;
+            return value;
+        } catch (NumberFormatException e) {
+            throw new ParseException("Invalid float value '" + str + "'.", mIndex);
+        }
+    }
+    public float getMax_X(){
+
+        return Max_X;
+    }
+    public float getMax_Y(){
+
+        return Max_y;
+    }
+    public float getMin_X(){
+
+        return Min_x;
+    }
+    public float getMin_Y(){
+
+        return Min_y;
+    }
+
 }
