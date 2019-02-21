@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="100dp"
+    android:layout_height="35dp"
+    android:alpha="0.65"
+    android:background="@drawable/marker_backgound_ratio"
+    android:orientation="horizontal">
+
+    <LinearLayout
+        android:id="@+id/penetra_click"
+        android:layout_width="match_parent"
+        android:layout_weight="1"
+        android:gravity="center"
+        android:layout_height="match_parent">
+        <ImageView
+            android:layout_width="18dp"
+            android:layout_height="18dp"
+            android:layout_gravity="center"
+            android:scaleType="centerInside"
+            android:src="@drawable/has_click" />
+
+    </LinearLayout>
+
+
+    <View
+        android:id="@+id/middle_line"
+        android:layout_width="1dp"
+        android:layout_height="match_parent"
+        android:background="@android:color/white"
+        />
+    <LinearLayout
+        android:id="@+id/drillDown_click"
+        android:layout_weight="1"
+        android:layout_width="match_parent"
+        android:gravity="center"
+        android:layout_height="match_parent">
+        <ImageView
+
+            android:layout_width="18dp"
+            android:layout_height="18dp"
+            android:layout_gravity="center"
+            android:scaleType="centerInside"
+            android:src="@drawable/drill_down" />
+
+    </LinearLayout>
+
+
+</LinearLayout>

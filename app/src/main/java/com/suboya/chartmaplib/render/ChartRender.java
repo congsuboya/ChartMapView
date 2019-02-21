@@ -6,18 +6,26 @@ import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.PathMeasure;
 import android.graphics.PointF;
+import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.Region;
 
 import com.suboya.chartmaplib.charts.MapChart;
 import com.suboya.chartmaplib.data.BaseData;
 import com.suboya.chartmaplib.data.ChartData;
+import com.suboya.chartmaplib.data.HighlightData;
 
 import java.util.ArrayList;
 import java.util.List;
 
 public class ChartRender {
-    private Paint innerPaint, outerPaint;//画省份的内部画笔和外圈画笔
+
+    private Paint innerPaint, outerPaint,paintText;//画省份的内部画笔和外圈画笔 还有画名称标题
+
+    public int getSelectPosition() {
+        return selectPosition;
+    }
+
     private int selectPosition;
 
     public ChartRender(MapChart mapChart) {
@@ -32,6 +40,14 @@ public class ChartRender {
         outerPaint.setAntiAlias(true);
         outerPaint.setStrokeWidth(1);
         outerPaint.setStyle(Paint.Style.STROKE);
+
+
+        paintText = new Paint();
+        paintText.setAntiAlias(true);
+        paintText.setStyle(Paint.Style.FILL);
+        paintText.setStrokeWidth(5);
+        paintText.setTextSize(20);
+        paintText.setColor(Color.BLACK);
     }
 
     private MapChart mapChart;
@@ -52,6 +68,7 @@ public class ChartRender {
                         canvas.drawPath(p, innerPaint);
                         canvas.drawPath(p, outerPaint);
                     }
+//                    drawCenterText(canvas,chartData.getChartData().get(i));
                 }
             }
             //再绘制点击所在的省份,此时画笔宽度设为2.5，以达到着重显示的效果
@@ -63,6 +80,40 @@ public class ChartRender {
                 canvas.drawPath(p, outerPaint);
             }
         }
+    }
+
+
+    public void  drawCenterText(Canvas canvas,BaseData data){
+        PathMeasure measure = new PathMeasure(data.getListPath().get(0), false);
+        float[] pos1 = new float[2];
+        measure.getPosTan(measure.getLength() / 2, pos1, null);
+
+        /**
+         * 计算字体的宽高
+         */
+        Rect rect = new Rect();
+        paintText.getTextBounds(data.getName(), 0, data.getName().length(), rect);
+
+        int w = rect.width();
+        int h = rect.height();
+
+
+        canvas.drawText(data.getName(), pos1[0] - w / 2, pos1[1] + h, paintText);
+
+
+        /**
+         * 两点求中点
+         */
+        float[] pos2 = new float[2];
+        measure.getPosTan(0, pos2, null);
+
+        float[] point = new float[2];
+
+        point[0] = (pos1[0] + pos2[0]) / 2;
+        point[1] = (pos1[1] + pos2[1]) / 2;
+
+
+//        points.add(point);
     }
 
     public void initFirstData(float scale){

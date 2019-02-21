@@ -26,12 +26,25 @@ public class SvgUtil {
     private String path;
     private Context context;
     private float Max_X,Min_x,Max_y,Min_y;
+
+    private List<Integer> colorList = new ArrayList<>();
     public SvgUtil(String path, Context context){
         this.context=context;
         this.path=path;
     }
     public SvgUtil(Context context){
         this.context=context;
+        colorList.clear();
+        colorList.add(Color.parseColor("#3D55CC"));
+        colorList.add(Color.parseColor("#1DB8AB"));
+        colorList.add(Color.parseColor("#FF8106"));
+        colorList.add(Color.parseColor("#FCC565"));
+        colorList.add(Color.parseColor("#8150C7"));
+        colorList.add(Color.parseColor("#5AAAFA"));
+        colorList.add(Color.parseColor("#F06060"));
+        colorList.add(Color.parseColor("#FFA5B4"));
+        colorList.add(Color.parseColor("#2468A2"));
+        colorList.add(Color.parseColor("#54D1D1"));
     }
     public ChartData getProvinces(){
         ChartData map=new ChartData();
@@ -59,11 +72,11 @@ public class SvgUtil {
                     for(String ss:s){
                         ss+="z";
                         listpath.add(svg.parsePath(ss));
-//                        listpath.add(PathParser.createPathFromPathData(ss));
                     }
                     //拿到name和path
                     provinceModel.setName(name);
                     provinceModel.setListPath(listpath);
+//                    provinceModel.setColor(colorList.get(i%colorList.size()));
                     provinceModel.setColor(Color.WHITE);
                     provinceModel.setLineColor(Color.GRAY);
                     if (svg.getMax_X()>=Max_X){

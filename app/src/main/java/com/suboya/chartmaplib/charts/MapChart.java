@@ -2,34 +2,81 @@ package com.suboya.chartmaplib.charts;
 
 import android.content.Context;
 import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Region;
 import android.util.AttributeSet;
+import android.view.MotionEvent;
 import android.view.View;
-import android.view.ViewGroup;
 
+import com.suboya.chartmaplib.data.BaseData;
 import com.suboya.chartmaplib.data.ChartData;
+import com.suboya.chartmaplib.data.HighlightData;
 import com.suboya.chartmaplib.render.ChartRender;
+import com.suboya.chartmaplib.utils.ScrollScaleGestureDetector;
 
-import java.util.ArrayList;
-import java.util.List;
 
 public class MapChart extends View {
 
 
     private ChartData chartData;
+    private MarkerView markerView;
+    public HighlightData mHighlightData;
+    private Context context;
     private float viewWidth;           //View的宽度
     private boolean isFirst; //是否是第一次绘制,用于最初的适配
     private float map_scale = 0;
-
+    private ScrollScaleGestureDetector scrollScaleGestureDetector;//自定义的缩放拖拽手势帮助类
     private ChartRender mRender;
+
+    private ScrollScaleGestureDetector.OnScrollScaleGestureListener onScrollScaleGestureListener = new ScrollScaleGestureDetector.OnScrollScaleGestureListener() {
+        @Override
+        public void onClick(float x, float y) {
+            mHighlightData = null;
+            //只有点击在某一个省份内才会触发省份选择接口
+            for (BaseData p : chartData.getChartData()) {
+                for (Region region : p.getRegionList()) {
+                    if (region.contains((int) x, (int) y)) {
+                        //重置上一次选中省份的状态
+                        chartData.getChartData().get(mRender.getSelectPosition()).setSelect(false);
+                        chartData.getChartData().get(mRender.getSelectPosition()).setLineColor(Color.GRAY);
+                        setHighLight(x, y, p);
+                        //设置新的选中的省份
+                        p.setSelect(true);
+                        p.setLineColor(Color.BLACK);
+                        //暴露到Activity中的接口，把省的名字传过去
+//                        onProvinceClickLisener.onChose(p.getName());
+                        invalidate();
+                        return;
+                    }
+                }
+            }
+        }
+    };
+
+    private void setHighLight(float x, float y, BaseData p) {
+        mHighlightData = new HighlightData();
+        mHighlightData.setTouchX(x);
+        mHighlightData.setTouchY(y);
+        mHighlightData.setName(p.getName());
+
+        if (markerView == null) {
+            markerView = new MarkerView(context);
+        }
+        markerView.setMapChart(this);
+    }
 
     public MapChart(Context context) {
         super(context);
+        this.context = context;
         mRender = new ChartRender(this);
+        scrollScaleGestureDetector = new ScrollScaleGestureDetector(this, onScrollScaleGestureListener);
     }
 
     public MapChart(Context context, AttributeSet attrs) {
         super(context, attrs);
+        this.context = context;
         mRender = new ChartRender(this);
+        scrollScaleGestureDetector = new ScrollScaleGestureDetector(this, onScrollScaleGestureListener);
     }
 
 
@@ -69,12 +116,16 @@ public class MapChart extends View {
             mRender.initFirstData(map_scale);
         }
         //关联缩放和平移后的矩阵
-//            scrollScaleGestureDetector.connect(canvas);
-//            scrollScaleGestureDetector.setScaleMax(3);//最大缩放倍数
-//            scrollScaleGestureDetector.setScalemin(1);//最小缩放倍数
+        scrollScaleGestureDetector.connect(canvas);
+        scrollScaleGestureDetector.setScaleMax(3);//最大缩放倍数
+        scrollScaleGestureDetector.setScalemin(1);//最小缩放倍数
         //绘制Map
         mRender.drawAreaView(canvas);
         isFirst = false;
+
+        if (mHighlightData != null) {
+            markerView.draw(canvas, mHighlightData.getTouchX(), mHighlightData.getTouchY());
+        }
         super.onDraw(canvas);
     }
 
@@ -88,4 +139,8 @@ public class MapChart extends View {
         invalidate();
     }
 
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
+        return scrollScaleGestureDetector.onTouchEvent(event);
+    }
 }
